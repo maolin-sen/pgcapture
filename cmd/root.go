@@ -43,7 +43,8 @@ func main() {
 	}
 }
 
-func sourceToSink(src source.Source, sk sink.Sink) (err error) {
+// 从源获取数据然后发送到接收器
+func sourceToSink(src source.Source, sk sink.Sinker) (err error) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
@@ -58,6 +59,7 @@ func sourceToSink(src source.Source, sk sink.Sink) (err error) {
 	}
 
 	go func() {
+		//接收changes，发送pulsar，然后回复消费位置
 		checkpoints := sk.Apply(changes)
 		for cp := range checkpoints {
 			src.Commit(cp)
@@ -66,8 +68,14 @@ func sourceToSink(src source.Source, sk sink.Sink) (err error) {
 
 	<-signals
 	logrus.Info("receive signal, stopping...")
-	sk.Stop()
-	src.Stop()
+	err = sk.Stop()
+	if err != nil {
+		return err
+	}
+	err = src.Stop()
+	if err != nil {
+		return err
+	}
 	logrus.Info("receive signal, stopped")
 	if err := sk.Error(); err != nil {
 		return err

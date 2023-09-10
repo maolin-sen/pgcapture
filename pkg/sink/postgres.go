@@ -38,8 +38,8 @@ type PGXSink struct {
 	Renice    int64
 	LogReader io.Reader
 
-	conn      *pgx.Conn
-	raw       *pgconn.PgConn
+	conn      *pgx.Conn      // pg的connect
+	raw       *pgconn.PgConn // pg的connect下的基础connect
 	schema    *decode.PGXSchemaLoader
 	log       *logrus.Entry
 	prev      cursor.Checkpoint
@@ -81,6 +81,7 @@ func tryRenice(logger *logrus.Entry, renice, pid int64) {
 	logger.Infof("try renice to %d for pid %d: %s(%v)", renice, pid, string(out), err)
 }
 
+// Setup 进行接收逻辑复制日志的初始化工作并返回
 func (p *PGXSink) Setup() (cp cursor.Checkpoint, err error) {
 	ctx := context.Background()
 	p.conn, err = pgx.Connect(ctx, p.ConnStr)
@@ -184,6 +185,7 @@ func (p *PGXSink) findCheckpoint(ctx context.Context) (cp cursor.Checkpoint, err
 	return cp, nil
 }
 
+// Apply 将接收到的消息应用到PGX
 func (p *PGXSink) Apply(changes chan source.Change) chan cursor.Checkpoint {
 	var first bool
 	return p.BaseSink.apply(changes, func(change source.Change, committed chan cursor.Checkpoint) (err error) {

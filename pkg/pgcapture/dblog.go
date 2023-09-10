@@ -20,6 +20,7 @@ type DBLogGatewayConsumer struct {
 	err    atomic.Value
 }
 
+// Capture 接收change
 func (c *DBLogGatewayConsumer) Capture(cp cursor.Checkpoint) (changes chan source.Change, err error) {
 	stream, err := c.client.Capture(c.ctx)
 	if err != nil {
@@ -36,7 +37,7 @@ func (c *DBLogGatewayConsumer) Capture(cp cursor.Checkpoint) (changes chan sourc
 	changes = make(chan source.Change, 1000)
 
 	atomic.StoreInt64(&c.state, 1)
-
+	//起一个写入收到的Change协程
 	go func() {
 		defer close(changes)
 		for {
@@ -59,6 +60,7 @@ func (c *DBLogGatewayConsumer) Capture(cp cursor.Checkpoint) (changes chan sourc
 	return changes, nil
 }
 
+// Commit 发送消费者的消费进度到Gateway
 func (c *DBLogGatewayConsumer) Commit(cp cursor.Checkpoint) {
 	if atomic.LoadInt64(&c.state) == 1 {
 		if err := c.stream.Send(&pb.CaptureRequest{Type: &pb.CaptureRequest_Ack{Ack: &pb.CaptureAck{Checkpoint: &pb.Checkpoint{
@@ -72,6 +74,7 @@ func (c *DBLogGatewayConsumer) Commit(cp cursor.Checkpoint) {
 	}
 }
 
+// Requeue 发送消费者的消费进度到Gateway
 func (c *DBLogGatewayConsumer) Requeue(cp cursor.Checkpoint, reason string) {
 	if atomic.LoadInt64(&c.state) == 1 {
 		if err := c.stream.Send(&pb.CaptureRequest{Type: &pb.CaptureRequest_Ack{Ack: &pb.CaptureAck{Checkpoint: &pb.Checkpoint{

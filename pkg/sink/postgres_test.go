@@ -543,8 +543,8 @@ func TestPGXSink_ScanCheckpointFromLog(t *testing.T) {
 		"2021-03-01 16:25:02 UTC [1934-6] LOG:  invalid record length at AE28/49B13618: wanted 24, got 0\n" +
 		"2021-03-01 16:25:02 UTC [1934-7] LOG:  redo done at AE28/49B135E8\n" +
 		"2021-03-01 16:25:02 UTC [1934-8] LOG:  last completed transaction was at log time 2021-03-01 16:17:48.597172+00\n")
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
+	//defer os.Remove(tmp.Name())
+	//defer tmp.Close()
 
 	go func() {
 		for i := 0; i < 10000; i++ {
@@ -555,7 +555,7 @@ func TestPGXSink_ScanCheckpointFromLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	//defer reader.Close()
 
 	sink := newPGXSink()
 	sink.LogReader = reader

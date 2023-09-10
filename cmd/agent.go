@@ -38,6 +38,7 @@ func init() {
 	agent.Flags().StringVarP(&PrometheusAddr, "PrometheusAddr", "", ":2112", "the tcp address for prometheus server to listen")
 }
 
+// 微服务组件代理，启动其他微服务
 var agent = &cobra.Command{
 	Use:   "agent",
 	Short: "run as a agent accepting remote config",
@@ -64,14 +65,15 @@ type Agent struct {
 
 	mu         sync.Mutex
 	params     *structpb.Struct
-	dumper     *dblog.PGXSourceDumper
-	pgSink     *sink.PGXSink
-	pulsarSink *sink.PulsarSink
-	pgSrc      *source.PGXSource
+	dumper     *dblog.PGXSourceDumper //快照下载
+	pgSink     *sink.PGXSink          //pg接收器
+	pulsarSink *sink.PulsarSink       //pulsar接收器
+	pgSrc      *source.PGXSource      //pg源
 	sinkErr    error
 	sourceErr  error
 }
 
+// Configure 下发启动对应组件的参数
 func (a *Agent) Configure(ctx context.Context, request *pb.AgentConfigRequest) (*pb.AgentConfigResponse, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -102,6 +104,7 @@ func (a *Agent) Configure(ctx context.Context, request *pb.AgentConfigRequest) (
 	}
 }
 
+// Dump 以GRPC方式一次性获取快照
 func (a *Agent) Dump(ctx context.Context, req *pb.AgentDumpRequest) (*pb.AgentDumpResponse, error) {
 	var dumper *dblog.PGXSourceDumper
 	a.mu.Lock()
@@ -127,6 +130,7 @@ func (a *Agent) Dump(ctx context.Context, req *pb.AgentDumpRequest) (*pb.AgentDu
 	return &pb.AgentDumpResponse{Change: dump}, nil
 }
 
+// StreamDump 以流模式来供用户下载快照
 func (a *Agent) StreamDump(req *pb.AgentDumpRequest, server pb.Agent_StreamDumpServer) error {
 	resp, err := a.Dump(server.Context(), req)
 	if err != nil {
@@ -177,13 +181,15 @@ func (a *Agent) cleanup() error {
 	return err
 }
 
+// 根据参数初始化，并开始数据传输
 func (a *Agent) pg2pulsar(params *structpb.Struct) (*pb.AgentConfigResponse, error) {
 	v, err := extract(params, "PGConnURL", "PGReplURL", "PulsarURL", "PulsarTopic", "DecodePlugin", "?StartLSN", "?PulsarTracker", "?PulsarTrackerInterval", "?PulsarTrackerReplicateState")
 	if err != nil {
 		return nil, err
 	}
 
-	pgSrc := &source.PGXSource{SetupConnStr: v["PGConnURL"], ReplConnStr: v["PGReplURL"], ReplSlot: trimSlot(v["PulsarTopic"]), CreateSlot: true, CreatePublication: true, StartLSN: v["StartLSN"], DecodePlugin: v["DecodePlugin"]}
+	pgSrc := &source.PGXSource{SetupConnStr: v["PGConnURL"], ReplConnStr: v["PGReplURL"], ReplSlot: trimSlot(v["PulsarTopic"]),
+		CreateSlot: true, CreatePublication: true, StartLSN: v["StartLSN"], DecodePlugin: v["DecodePlugin"]}
 	pulsarSink := &sink.PulsarSink{PulsarOption: pulsar.ClientOptions{URL: v["PulsarURL"]}, PulsarTopic: v["PulsarTopic"]}
 
 	switch v["PulsarTracker"] {
@@ -236,6 +242,7 @@ func (a *Agent) pg2pulsar(params *structpb.Struct) (*pb.AgentConfigResponse, err
 	return a.report(a.params)
 }
 
+// 根据参数初始化，并开始数据传输
 func (a *Agent) pulsar2pg(params *structpb.Struct) (*pb.AgentConfigResponse, error) {
 	v, err := extract(params, "PGConnURL", "PulsarURL", "PulsarTopic")
 	if err != nil {
@@ -248,7 +255,6 @@ func (a *Agent) pulsar2pg(params *structpb.Struct) (*pb.AgentConfigResponse, err
 		if err != nil {
 			return nil, err
 		}
-		defer pgLog.Close()
 		pgSink.LogReader = pgLog
 	}
 
@@ -277,7 +283,8 @@ func (a *Agent) pulsar2pg(params *structpb.Struct) (*pb.AgentConfigResponse, err
 	return a.report(a.params)
 }
 
-func (a *Agent) sourceToSink(src source.Source, sk sink.Sink) (err error) {
+// 开始源到接收器的数据传输
+func (a *Agent) sourceToSink(src source.Source, sk sink.Sinker) (err error) {
 	lastCheckPoint, err := sk.Setup()
 	if err != nil {
 		return err
@@ -295,6 +302,7 @@ func (a *Agent) sourceToSink(src source.Source, sk sink.Sink) (err error) {
 			src.Commit(cp)
 		}
 	}()
+
 	go func() {
 		check := func() bool {
 			a.mu.Lock()

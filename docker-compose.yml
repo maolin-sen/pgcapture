@@ -1,18 +1,27 @@
 version: "3.8"
 
+## 锚点
 x-common-pg: &common-pg
   build:
+    ## 指定用于构建镜像的上下文路径。在这个例子中，它是hack/postgres目录，即Dockerfile所在的目录。
     context: hack/postgres
+    ## 指定用于构建镜像的Dockerfile文件的位置。
     dockerfile: ${PG_VERSION}/Dockerfile
+  ## 指定在哪个平台上运行容器。
   platform: ${PLATFORM}
+  ## 定义将容器内的端口映射到宿主机的端口。
   ports:
     - "5432:5432"
+  ## 指定容器启动时要运行的命令。
   command: [ "postgres", "-c", "config_file=/pgc/postgresql.conf", "-c","hba_file=/pgc/pg_hba.conf" ]
+  ## environment：定义容器中的环境变量。
   environment:
     POSTGRES_HOST_AUTH_METHOD: trust
+  ## 将容器内的路径与宿主机上的路径进行映射。
   volumes:
     - ./hack/postgres:/pgc
 
+## 锚点
 x-common: &common
   build:
     context: .
@@ -22,19 +31,25 @@ x-common: &common
     - .:/src
     - ${LOCAL_GOPATH}/pkg/mod/cache:/go/pkg/mod/cache
 
+## 锚点
 x-common-test-env: &common-test-env
   PG_VERSION: ${PG_VERSION}
   POSTGRES_URL: postgres://postgres@postgres:5432/postgres?sslmode=disable
   PULSAR_URL: pulsar://pulsar:6650
   PULSAR_ADMIN_URL: http://pulsar:8080
 
+## 锚点
 x-common-test: &common-test
+  ## YAML中的"合并键"语法。它允许将所述键的值与之前定义的YAML锚点或别名相结合。
   <<: *common
+  ## 这将 common-test-env 别名的值赋给当前服务的 environment 字段
   environment: *common-test-env
+  ## 当前服务所依赖的其他服务。
   depends_on:
     - pg_${PG_VERSION}
     - pulsar
 
+## 锚点
 x-common-build: &common-build
   <<: *common
   environment:

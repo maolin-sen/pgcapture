@@ -20,8 +20,8 @@ import (
 
 type Gateway struct {
 	pb.UnimplementedDBLogGatewayServer
-	SourceResolver SourceResolver
-	DumpInfoPuller DumpInfoPuller
+	SourceResolver SourceResolver //下载change
+	DumpInfoPuller DumpInfoPuller //下载元信息的请求和获取
 }
 
 func (s *Gateway) Serve(ctx context.Context, ln net.Listener, opts ...grpc.ServerOption) error {
@@ -40,6 +40,7 @@ func (s *Gateway) Serve(ctx context.Context, ln net.Listener, opts ...grpc.Serve
 	return server.Serve(ln)
 }
 
+// Capture 下游通过server来流式消费change
 func (s *Gateway) Capture(server pb.DBLogGateway_CaptureServer) error {
 	request, err := server.Recv()
 	if err != nil {
@@ -56,10 +57,12 @@ func (s *Gateway) Capture(server pb.DBLogGateway_CaptureServer) error {
 		return err
 	}
 
+	// pulsar
 	src, err := s.SourceResolver.Source(server.Context(), init.Uri)
 	if err != nil {
 		return err
 	}
+	// agent
 	dumper, err := s.SourceResolver.Dumper(server.Context(), init.Uri)
 	if err != nil {
 		return err
@@ -148,6 +151,7 @@ func (s *Gateway) capture(init *pb.CaptureInit, filter *regexp.Regexp, server pb
 
 	lsn := uint64(0)
 
+	// 异步获取changes,dumps_info
 	for {
 		select {
 		case <-server.Context().Done():
@@ -156,6 +160,7 @@ func (s *Gateway) capture(init *pb.CaptureInit, filter *regexp.Regexp, server pb
 			if !more {
 				return nil
 			}
+			// 发送changes到consumer
 			if change := msg.Message.GetChange(); change != nil && (filter == nil || filter.MatchString(change.Table)) {
 				if err := server.Send(&pb.CaptureMessage{Checkpoint: &pb.Checkpoint{
 					Lsn:  msg.Checkpoint.LSN,
@@ -195,6 +200,7 @@ func (s *Gateway) capture(init *pb.CaptureInit, filter *regexp.Regexp, server pb
 			logger.WithFields(logrus.Fields{"Dump": info.Resp.String(), "Len": len(dump)}).Info("dump loaded")
 			dumpID := ongoingDumps.store(info)
 
+			//发送dumps的records到consumer
 			var isLast []byte
 			for i, change := range dump {
 				if i+1 == len(dump) {
@@ -216,6 +222,7 @@ func (s *Gateway) capture(init *pb.CaptureInit, filter *regexp.Regexp, server pb
 	}
 }
 
+// 返回符合正则表达式的regexp
 func tableRegexFromInit(init *pb.CaptureInit) (*regexp.Regexp, error) {
 	if init.Parameters == nil || init.Parameters.Fields == nil {
 		return nil, nil

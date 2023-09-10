@@ -83,13 +83,13 @@ type Consumer struct {
 	errFn   OnDecodeError
 }
 
-func (c *Consumer) ConsumeAsync(mh ModelAsyncHandlers) error {
-	if err := c.Bouncer.Initialize(c.ctx, mh); err != nil {
+func (c *Consumer) ConsumeAsync(mah ModelAsyncHandlers) error {
+	if err := c.Bouncer.Initialize(c.ctx, mah); err != nil {
 		return err
 	}
 
-	refs := make(map[string]reflection, len(mh))
-	for m, h := range mh {
+	refs := make(map[string]reflection, len(mah))
+	for m, h := range mah {
 		ref, err := reflectModel(m)
 		if err != nil {
 			return err
@@ -98,6 +98,7 @@ func (c *Consumer) ConsumeAsync(mh ModelAsyncHandlers) error {
 		refs[ModelName(m.TableName())] = ref
 	}
 
+	// 内部起一个协程接收change到一个缓存chan
 	changes, err := c.Source.Capture(cursor.Checkpoint{})
 	if err != nil {
 		return err
@@ -110,12 +111,12 @@ func (c *Consumer) ConsumeAsync(mh ModelAsyncHandlers) error {
 			if !ok {
 				break
 			}
-			n, err := makeModel(ref, m.Change.New)
+			newRecord, err := makeModel(ref, m.Change.New)
 			if err != nil {
 				c.errFn(change, err)
 				break
 			}
-			o, err := makeModel(ref, m.Change.Old)
+			oldRecord, err := makeModel(ref, m.Change.Old)
 			if err != nil {
 				c.errFn(change, err)
 				break
@@ -123,8 +124,8 @@ func (c *Consumer) ConsumeAsync(mh ModelAsyncHandlers) error {
 			c.Bouncer.Handle(ref.hdl, change.Checkpoint, Change{
 				Op:         m.Change.Op,
 				Checkpoint: change.Checkpoint,
-				New:        n,
-				Old:        o,
+				New:        newRecord,
+				Old:        oldRecord,
 			})
 			continue
 		}

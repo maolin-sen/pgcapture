@@ -29,11 +29,13 @@ func init() {
 	pg2pulsar.MarkFlagRequired("PulsarTopic")
 }
 
+// 微服务组件
 var pg2pulsar = &cobra.Command{
 	Use:   "pg2pulsar",
 	Short: "Capture logical replication logs to a Pulsar Topic from a PostgreSQL logical replication slot",
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
-		pgSrc := &source.PGXSource{SetupConnStr: SourcePGConnURL, ReplConnStr: SourcePGReplURL, ReplSlot: trimSlot(SinkPulsarTopic), CreateSlot: true, CreatePublication: true, DecodePlugin: DecodePlugin}
+		pgSrc := &source.PGXSource{SetupConnStr: SourcePGConnURL, ReplConnStr: SourcePGReplURL, ReplSlot: trimSlot(SinkPulsarTopic),
+			CreateSlot: true, CreatePublication: true, DecodePlugin: DecodePlugin}
 		pulsarSink := &sink.PulsarSink{PulsarOption: pulsar.ClientOptions{URL: SinkPulsarURL}, PulsarTopic: SinkPulsarTopic}
 		return sourceToSink(pgSrc, pulsarSink)
 	},

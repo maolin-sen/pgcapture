@@ -17,7 +17,7 @@ type fieldSet struct {
 }
 
 func fieldSetWithList(list pgtype.Array[pgtype.Text]) fieldSet {
-	s := fieldSet{set: make(map[string]struct{}, len(list.Elements))}
+	s := fieldSet{set: make(map[string]struct{}, 0)}
 	for _, v := range list.Elements {
 		s.append(v.String)
 	}

@@ -29,14 +29,15 @@ type PulsarSink struct {
 
 	SetupTracker SetupTracker
 
-	client     pulsar.Client
-	tracker    cursor.Tracker
-	producer   pulsar.Producer
+	client     pulsar.Client   //pulsar client
+	tracker    cursor.Tracker  //pulsar reader
+	producer   pulsar.Producer //pulsar producer
 	log        *logrus.Entry
 	prev       cursor.Checkpoint
 	consistent bool
 }
 
+// Setup 初始化
 func (p *PulsarSink) Setup() (cp cursor.Checkpoint, err error) {
 	p.client, err = pulsar.NewClient(p.PulsarOption)
 	if err != nil {
@@ -96,6 +97,7 @@ func (p *PulsarSink) Setup() (cp cursor.Checkpoint, err error) {
 	return cp, nil
 }
 
+// Apply pulsar接收器将接收到的数据发送到队列
 func (p *PulsarSink) Apply(changes chan source.Change) chan cursor.Checkpoint {
 	p.tracker.Start()
 
@@ -131,6 +133,7 @@ func (p *PulsarSink) Apply(changes chan source.Change) chan cursor.Checkpoint {
 			return err
 		}
 
+		//读取changes信息，然后发送到pulsar
 		p.producer.SendAsync(context.Background(), &pulsar.ProducerMessage{
 			Key:                 change.Checkpoint.ToKey(), // for topic compaction, not routing policy
 			Payload:             bs,

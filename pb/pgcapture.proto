@@ -6,6 +6,7 @@ option go_package = "github.com/rueian/pgcapture/pkg/pb";
 import "google/protobuf/struct.proto";
 import "google/protobuf/duration.proto";
 
+// 数据触发基本类型
 message Checkpoint {
   uint64 lsn = 1;
   uint32 seq = 2;
@@ -54,21 +55,15 @@ message Field {
   }
 }
 
+
 service DBLogGateway {
   rpc Capture(stream CaptureRequest) returns (stream CaptureMessage);
 }
 
-service DBLogController {
-  rpc PullDumpInfo(stream DumpInfoRequest) returns (stream DumpInfoResponse);
-  rpc Schedule(ScheduleRequest) returns (ScheduleResponse);
-  rpc StopSchedule(StopScheduleRequest) returns (StopScheduleResponse);
-  rpc SetScheduleCoolDown(SetScheduleCoolDownRequest) returns (SetScheduleCoolDownResponse);
-}
-
 message CaptureRequest {
   oneof type {
-    CaptureInit init = 1;
-    CaptureAck ack = 2;
+    CaptureInit init = 1; //客户端第一次请求
+    CaptureAck ack = 2;   //客户端后续请求（上报消费游标）
   }
 }
 
@@ -85,6 +80,13 @@ message CaptureAck {
 message CaptureMessage {
   Checkpoint checkpoint = 1;
   Change change = 2;
+}
+
+service DBLogController {
+  rpc PullDumpInfo(stream DumpInfoRequest) returns (stream DumpInfoResponse);
+  rpc Schedule(ScheduleRequest) returns (ScheduleResponse);
+  rpc StopSchedule(StopScheduleRequest) returns (StopScheduleResponse);
+  rpc SetScheduleCoolDown(SetScheduleCoolDownRequest) returns (SetScheduleCoolDownResponse);
 }
 
 message DumpInfoRequest {

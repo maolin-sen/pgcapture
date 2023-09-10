@@ -96,6 +96,7 @@ func (p *PGXSource) Capture(cp cursor.Checkpoint) (changes chan Change, err erro
 		}
 	}
 
+	// 为复制做准备
 	p.replConn, err = pgconn.Connect(context.Background(), p.ReplConnStr)
 	if err != nil {
 		return nil, err
@@ -138,6 +139,7 @@ func (p *PGXSource) Capture(cp cursor.Checkpoint) (changes chan Change, err erro
 			"FromLSN":  p.currentLsn,
 		}).Info("start logical replication from the latest position")
 	}
+
 	p.Commit(cursor.Checkpoint{LSN: p.currentLsn})
 	if err = pglogrepl.StartReplication(
 		context.Background(),
@@ -153,16 +155,22 @@ func (p *PGXSource) Capture(cp cursor.Checkpoint) (changes chan Change, err erro
 }
 
 func (p *PGXSource) fetching(ctx context.Context) (change Change, err error) {
+
+	// 定时发送committedLSN
 	if time.Now().After(p.nextReportTime) {
 		if err = p.reportLSN(ctx); err != nil {
 			return change, err
 		}
 		p.nextReportTime = time.Now().Add(5 * time.Second)
 	}
+
+	// 如果没有消息可用，该方法将会阻塞当前的 goroutine，直到接收到消息为止
 	msg, err := p.replConn.ReceiveMessage(ctx)
 	if err != nil {
 		return change, err
 	}
+
+	// 接收到新的消息
 	switch msg := msg.(type) {
 	case *pgproto3.CopyData:
 		switch msg.Data[0] {
@@ -231,6 +239,7 @@ func (p *PGXSource) committedLSN() (lsn pglogrepl.LSN) {
 	return pglogrepl.LSN(atomic.LoadUint64(&p.ackLsn))
 }
 
+// 向postgres发送committedLSN
 func (p *PGXSource) reportLSN(ctx context.Context) error {
 	if committed := p.committedLSN(); committed != 0 {
 		return pglogrepl.SendStandbyStatusUpdate(ctx, p.replConn, pglogrepl.StandbyStatusUpdate{WALWritePosition: committed})

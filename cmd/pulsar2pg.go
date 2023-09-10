@@ -29,6 +29,7 @@ func init() {
 	pulsar2pg.MarkFlagRequired("PulsarTopic")
 }
 
+// 微服务组件
 var pulsar2pg = &cobra.Command{
 	Use:   "pulsar2pg",
 	Short: "Apply logical replication logs to a PostgreSQL from a Pulsar Topic",
@@ -39,7 +40,6 @@ var pulsar2pg = &cobra.Command{
 			if err != nil {
 				return err
 			}
-			defer pgLog.Close()
 			pgSink.LogReader = pgLog
 		}
 		pulsarSrc := &source.PulsarReaderSource{PulsarOption: pulsar.ClientOptions{URL: SourcePulsarURL}, PulsarTopic: SourcePulsarTopic}

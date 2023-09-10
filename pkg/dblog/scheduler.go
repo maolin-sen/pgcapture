@@ -31,14 +31,20 @@ func NewMemoryScheduler(interval time.Duration) *MemoryScheduler {
 	}
 }
 
+// MemoryScheduler 任务调度
 type MemoryScheduler struct {
-	interval  time.Duration
-	pending   map[string]*pending
-	clients   map[string]map[string]*track
+	interval  time.Duration                //调度间隔
+	pending   map[string]*pending          //任务队列
+	clients   map[string]map[string]*track //接收端
 	pendingMu sync.Mutex
 	clientsMu sync.Mutex
 }
 
+/*
+fn = func() {log.Infof("finish scheduling dumps of %s", req.Uri)}
+*/
+
+// Schedule 注册任务
 func (s *MemoryScheduler) Schedule(uri string, dumps []*pb.DumpInfoResponse, fn AfterSchedule) error {
 	s.pendingMu.Lock()
 	defer s.pendingMu.Unlock()
@@ -77,6 +83,7 @@ func (s *MemoryScheduler) schedule(uri string, fn AfterSchedule) {
 	}
 }
 
+// 一个个发送dump info 到端
 func (s *MemoryScheduler) scheduleOne(uri string) bool {
 	var candidate *track
 	var dump *pb.DumpInfoResponse

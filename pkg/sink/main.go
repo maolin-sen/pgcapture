@@ -14,7 +14,8 @@ import (
 type CleanFn func()
 type ApplyFn func(message source.Change, committed chan cursor.Checkpoint) error
 
-type Sink interface {
+// Sinker 接收器接口
+type Sinker interface {
 	Setup() (cp cursor.Checkpoint, err error)
 	Apply(changes chan source.Change) (committed chan cursor.Checkpoint)
 	Error() error
@@ -60,6 +61,7 @@ func (b *BaseSink) apply(changes chan source.Change, applyFn ApplyFn) (committed
 			case <-ticker.C:
 			}
 		}
+		
 	cleanup:
 		ticker.Stop()
 		atomic.StoreInt64(&b.state, 4)
@@ -68,6 +70,7 @@ func (b *BaseSink) apply(changes chan source.Change, applyFn ApplyFn) (committed
 			// this loop should do nothing and only exit when the input channel is closed
 		}
 	}()
+
 	return b.committed
 }
 

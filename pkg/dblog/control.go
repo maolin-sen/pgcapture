@@ -22,10 +22,11 @@ func NewController(scheduler Scheduler) *Controller {
 type Controller struct {
 	pb.UnimplementedDBLogControllerServer
 	Scheduler Scheduler
-	clients   int64
+	clients   int64 //为每个client分配一个id
 	log       *logrus.Entry
 }
 
+// PullDumpInfo 注册dump info的接收端
 func (c *Controller) PullDumpInfo(server pb.DBLogController_PullDumpInfoServer) (err error) {
 	id := strconv.FormatInt(atomic.AddInt64(&c.clients, 1), 10)
 
@@ -63,6 +64,7 @@ func (c *Controller) PullDumpInfo(server pb.DBLogController_PullDumpInfoServer) 
 	}
 }
 
+// Schedule 发起dump info任务
 func (c *Controller) Schedule(ctx context.Context, req *pb.ScheduleRequest) (*pb.ScheduleResponse, error) {
 	log := c.log.WithFields(logrus.Fields{
 		"URI":     req.Uri,

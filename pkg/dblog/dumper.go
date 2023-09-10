@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// SourceDumper 下载快照接口
 type SourceDumper interface {
 	LoadDump(minLSN uint64, info *pb.DumpInfoResponse) ([]*pb.Change, error)
 	Stop()
@@ -32,11 +33,13 @@ func NewAgentSourceDumper(ctx context.Context, url string) (*AgentSource, error)
 	}, nil
 }
 
+// AgentSource 通过GRPC流模式来获取快照
 type AgentSource struct {
 	conn   *grpc.ClientConn
 	client pb.AgentClient
 }
 
+// LoadDump 下载指定记录
 func (a *AgentSource) LoadDump(minLSN uint64, info *pb.DumpInfoResponse) (changes []*pb.Change, err error) {
 	stream, err := a.client.StreamDump(context.Background(), &pb.AgentDumpRequest{
 		MinLsn: minLSN,
@@ -81,6 +84,7 @@ func NewPGXSourceDumper(ctx context.Context, url string) (*PGXSourceDumper, erro
 	return &PGXSourceDumper{conn: conn}, nil
 }
 
+// PGXSourceDumper 通过连接postgres来获取快照
 type PGXSourceDumper struct {
 	conn *pgx.Conn
 	mu   sync.Mutex

@@ -10,6 +10,7 @@ import (
 
 var _ Tracker = (*PulsarTracker)(nil)
 
+// PulsarTracker 由用户自己手动在Topic中定位，读取想要读取的消息
 type PulsarTracker struct {
 	reader pulsar.Reader
 }

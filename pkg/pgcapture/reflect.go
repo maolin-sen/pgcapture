@@ -24,7 +24,7 @@ type Change struct {
 type ModelHandlerFunc func(change Change) error
 type ModelAsyncHandlerFunc func(change Change, done func(err error))
 type ModelHandlers map[Model]ModelHandlerFunc
-type ModelAsyncHandlers map[Model]ModelAsyncHandlerFunc
+type ModelAsyncHandlers map[Model]ModelAsyncHandlerFunc //map[tableName]ModelAsyncHandlerFunc
 
 func toAsyncHandlerFunc(fn ModelHandlerFunc) ModelAsyncHandlerFunc {
 	return func(change Change, done func(err error)) {

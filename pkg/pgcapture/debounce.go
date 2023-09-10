@@ -45,6 +45,7 @@ type event struct {
 	Handler    ModelAsyncHandlerFunc
 }
 
+// DebounceHandler 防抖动
 type DebounceHandler struct {
 	Interval time.Duration
 	source   source.RequeueSource
@@ -53,7 +54,9 @@ type DebounceHandler struct {
 	mu       sync.Mutex
 }
 
+// Initialize 初始化事件处理
 func (b *DebounceHandler) Initialize(ctx context.Context, mh ModelAsyncHandlers) error {
+	//parameter check
 	for model := range mh {
 		if _, ok := model.(DebounceModel); !ok {
 			schema, table := model.TableName()
@@ -65,13 +68,17 @@ func (b *DebounceHandler) Initialize(ctx context.Context, mh ModelAsyncHandlers)
 
 	go func() {
 		var err error
+		//定时处理事件
 		for err == nil {
 			time.Sleep(b.Interval)
+
+			//出错，退出循环
 			select {
 			case <-b.ctx.Done():
 				err = b.ctx.Err()
 			default:
 			}
+
 			b.mu.Lock()
 			for k, v := range b.store {
 				b.handle(v)
@@ -115,10 +122,11 @@ func (b *DebounceHandler) Handle(fn ModelAsyncHandlerFunc, checkpoint cursor.Che
 		if prev, ok := b.store[key]; ok {
 			b.source.Commit(prev.Checkpoint)
 		}
-		b.store[key] = e
+		b.store[key] = e //缓存update的数据
 	}
 }
 
+// Handler <=> fn:用户自定义处理函数
 func (b *DebounceHandler) handle(e event) {
 	e.Handler(e.Change, func(err error) {
 		if err != nil {
