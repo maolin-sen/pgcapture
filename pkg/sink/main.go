@@ -7,12 +7,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rueian/pgcapture/pkg/cursor"
-	"github.com/rueian/pgcapture/pkg/source"
+	"github.com/replicase/pgcapture/pkg/cursor"
+	"github.com/replicase/pgcapture/pkg/source"
 )
 
 type CleanFn func()
-type ApplyFn func(message source.Change, committed chan cursor.Checkpoint) error
+type ApplyFn func(sourceRemaining int, message source.Change, committed chan cursor.Checkpoint) error
 
 // Sinker 接收器接口
 type Sinker interface {
@@ -54,7 +54,7 @@ func (b *BaseSink) apply(changes chan source.Change, applyFn ApplyFn) (committed
 				if !more {
 					goto cleanup
 				}
-				if err := applyFn(change, b.committed); err != nil {
+				if err := applyFn(len(changes), change, b.committed); err != nil {
 					b.err.Store(fmt.Errorf("%w", err))
 					goto cleanup
 				}

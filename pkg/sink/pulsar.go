@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/apache/pulsar-client-go/pulsar"
-	"github.com/rueian/pgcapture/pkg/cursor"
-	"github.com/rueian/pgcapture/pkg/source"
+	"github.com/replicase/pgcapture/pkg/cursor"
+	"github.com/replicase/pgcapture/pkg/source"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -102,7 +102,7 @@ func (p *PulsarSink) Apply(changes chan source.Change) chan cursor.Checkpoint {
 	p.tracker.Start()
 
 	var first bool
-	return p.BaseSink.apply(changes, func(change source.Change, committed chan cursor.Checkpoint) error {
+	return p.BaseSink.apply(changes, func(_ int, change source.Change, committed chan cursor.Checkpoint) error {
 		if !first {
 			p.log.WithFields(logrus.Fields{
 				"MessageLSN":         change.Checkpoint.LSN,

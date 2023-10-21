@@ -2,7 +2,7 @@
 
 A scalable Netflix DBLog implementation for PostgreSQL
 
-![circleci](https://circleci.com/gh/rueian/pgcapture.svg?style=shield)
+![circleci](https://circleci.com/gh/replicase/pgcapture.svg?style=shield)
 [![Maintainability](https://api.codeclimate.com/v1/badges/efd0f50a92233b34ae5e/maintainability)](https://codeclimate.com/github/rueian/pgcapture/maintainability)
 [![Test Coverage](https://api.codeclimate.com/v1/badges/efd0f50a92233b34ae5e/test_coverage)](https://codeclimate.com/github/rueian/pgcapture/test_coverage)
 
@@ -51,7 +51,7 @@ To begin consuming changes and dumps, there are some server side components shou
 * dblog controller
 * dblog grpc gateway server
 
-Please checkout https://github.com/KennyChenFight/docker-pgcapture for guidance.
+Please checkout [docker-pgcapture](https://github.com/replicase/docker-pgcapture) for guidance.
 
 ## Consume changes with Golang
 
@@ -64,7 +64,7 @@ import (
 
     pgtypeV4 "github.com/jackc/pgtype"
     "github.com/jackc/pgx/v5/pgtype"
-    "github.com/rueian/pgcapture"
+    "github.com/replicase/pgcapture"
     "google.golang.org/grpc"
 )
 
@@ -144,7 +144,7 @@ import (
     "context"
     "net"
 	
-    "github.com/rueian/pgcapture"
+    "github.com/replicase/pgcapture"
     "google.golang.org/grpc"
 )
 
