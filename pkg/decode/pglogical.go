@@ -40,19 +40,20 @@ type PGLogicalDecoder struct {
 	log        *logrus.Entry
 }
 
+// Decode 解析传入的字节序
 func (p *PGLogicalDecoder) Decode(in []byte) (m *pb.Message, err error) {
 	switch in[0] {
 	case 'B':
-		return p.ReadBegin(in)
+		return p.readBegin(in)
 	case 'C':
-		return p.ReadCommit(in)
+		return p.readCommit(in)
 	case 'R':
 		r := Relation{}
-		err = p.ReadRelation(in, &r)
+		err = p.readRelation(in, &r)
 		p.relations[r.Rel] = r
 	case 'I', 'U', 'D':
 		r := RowChange{}
-		if err = p.ReadRowChange(in, &r); err != nil {
+		if err = p.readRowChange(in, &r); err != nil {
 			return nil, err
 		}
 
@@ -78,35 +79,7 @@ func (p *PGLogicalDecoder) GetPluginArgs() []string {
 	return p.pluginArgs
 }
 
-func (p *PGLogicalDecoder) makePBTuple(rel Relation, src []Field, noNull bool) (fields []*pb.Field) {
-	if src == nil {
-		return nil
-	}
-	fields = make([]*pb.Field, 0, len(src))
-	for i, s := range src {
-		if noNull && s.Datum == nil {
-			continue
-		}
-		oid, err := p.schema.GetTypeOID(rel.NspName, rel.RelName, rel.Fields[i])
-		if err != nil {
-			// TODO: add optional logging, because it will generate a lot of logs when refreshing materialized view
-			continue
-		}
-		switch s.Format {
-		case 'b':
-			fields = append(fields, &pb.Field{Name: rel.Fields[i], Oid: oid, Value: &pb.Field_Binary{Binary: s.Datum}})
-		case 'n':
-			fields = append(fields, &pb.Field{Name: rel.Fields[i], Oid: oid, Value: nil})
-		case 't':
-			fields = append(fields, &pb.Field{Name: rel.Fields[i], Oid: oid, Value: &pb.Field_Text{Text: string(s.Datum)}})
-		case 'u':
-			continue // unchanged toast field should be excluded
-		}
-	}
-	return fields
-}
-
-func (p *PGLogicalDecoder) ReadBegin(in []byte) (*pb.Message, error) {
+func (p *PGLogicalDecoder) readBegin(in []byte) (*pb.Message, error) {
 	if len(in) != 1+1+8+8+4 {
 		return nil, errors.New("begin wrong length")
 	}
@@ -117,7 +90,7 @@ func (p *PGLogicalDecoder) ReadBegin(in []byte) (*pb.Message, error) {
 	}}}, nil
 }
 
-func (p *PGLogicalDecoder) ReadCommit(in []byte) (*pb.Message, error) {
+func (p *PGLogicalDecoder) readCommit(in []byte) (*pb.Message, error) {
 	if len(in) != 1+1+8+8+8 {
 		return nil, errors.New("commit wrong length")
 	}
@@ -128,7 +101,7 @@ func (p *PGLogicalDecoder) ReadCommit(in []byte) (*pb.Message, error) {
 	}}}, nil
 }
 
-func (p *PGLogicalDecoder) ReadRelation(in []byte, m *Relation) (err error) {
+func (p *PGLogicalDecoder) readRelation(in []byte, m *Relation) (err error) {
 	reader := NewBytesReader(in)
 	reader.Skip(2) // skip op and flags
 
@@ -155,7 +128,7 @@ func (p *PGLogicalDecoder) ReadRelation(in []byte, m *Relation) (err error) {
 	return err
 }
 
-func (p *PGLogicalDecoder) ReadRowChange(in []byte, m *RowChange) (err error) {
+func (p *PGLogicalDecoder) readRowChange(in []byte, m *RowChange) (err error) {
 	reader := NewBytesReader(in)
 	m.Op, err = reader.Byte()
 	reader.Skip(1) // skip flags
@@ -174,6 +147,7 @@ func (p *PGLogicalDecoder) ReadRowChange(in []byte, m *RowChange) (err error) {
 	return err
 }
 
+// 解析表各个列的数据类型和值
 func (p *PGLogicalDecoder) readTuple(reader *BytesReader) (fields []Field, err error) {
 	if t, err := reader.Byte(); err != nil || t != 'T' {
 		return nil, errors.New("expect T for tuple message, got " + string(t))
@@ -200,4 +174,33 @@ func (p *PGLogicalDecoder) readTuple(reader *BytesReader) (fields []Field, err e
 		}
 	}
 	return
+}
+
+// 转换表各个列的数据类型和值的表示
+func (p *PGLogicalDecoder) makePBTuple(rel Relation, src []Field, noNull bool) (fields []*pb.Field) {
+	if src == nil {
+		return nil
+	}
+	fields = make([]*pb.Field, 0, len(src))
+	for i, s := range src {
+		if noNull && s.Datum == nil {
+			continue
+		}
+		oid, err := p.schema.GetTypeOID(rel.NspName, rel.RelName, rel.Fields[i])
+		if err != nil {
+			// TODO: add optional logging, because it will generate a lot of logs when refreshing materialized view
+			continue
+		}
+		switch s.Format {
+		case 'b': //binary
+			fields = append(fields, &pb.Field{Name: rel.Fields[i], Oid: oid, Value: &pb.Field_Binary{Binary: s.Datum}})
+		case 'n': //null
+			fields = append(fields, &pb.Field{Name: rel.Fields[i], Oid: oid, Value: nil})
+		case 't': //text
+			fields = append(fields, &pb.Field{Name: rel.Fields[i], Oid: oid, Value: &pb.Field_Text{Text: string(s.Datum)}})
+		case 'u': //toast
+			continue // unchanged toast field should be excluded
+		}
+	}
+	return fields
 }

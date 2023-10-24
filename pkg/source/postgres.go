@@ -17,6 +17,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// PGXSource 实现了与PG的逻辑复制功能
 type PGXSource struct {
 	BaseSource
 
@@ -31,7 +32,7 @@ type PGXSource struct {
 	setupConn      *pgx.Conn
 	replConn       *pgconn.PgConn
 	schema         *decode.PGXSchemaLoader
-	decoder        decode.Decoder
+	decoder        decode.Decoder //实现了内部表示到外部表示的转码
 	nextReportTime time.Time
 	ackLsn         uint64
 	txCounter      uint64
@@ -170,16 +171,38 @@ func (p *PGXSource) fetching(ctx context.Context) (change Change, err error) {
 		return change, err
 	}
 
+	/*
+		XLogDataByteID：这个常量代表 'w'，在 PostgresSQL 的复制协议中，它表示一个 WAL 数据消息（XLogData 消息）。
+		这种消息包含了 WAL 数据的有效负载。
+		PrimaryKeepaliveMessageByteID：这个常量代表 'k'，在 PostgresSQL 的复制协议中，它表示一个主服务器的保活消息（PrimaryKeepaliveMessage）。
+		这种消息由主服务器定期发送，用于告知备份服务器主服务器的状态。
+		StandbyStatusUpdateByteID：这个常量代表 'r'，在 PostgresSQL 的复制协议中，它表示一个备份服务器状态更新消息（StandbyStatusUpdate）。
+		这种消息由备份服务器发送，用于告知主服务器备份服务器的状态。
+	*/
 	// 接收到新的消息
 	switch msg := msg.(type) {
 	case *pgproto3.CopyData:
 		switch msg.Data[0] {
 		case pglogrepl.PrimaryKeepaliveMessageByteID:
+			/*
+				ServerWALEnd：这是一个LSN类型的字段，表示主服务器的WAL（Write-Ahead Logging）结束位置。
+				LSN（Log Sequence Number）是PostgreSQL中用于标识WAL位置的数据类型。
+				ServerTime：这是一个time.Time类型的字段，
+				表示主服务器发送保活消息时的服务器时间。
+				ReplyRequested：这是一个bool类型的字段，表示主服务器是否请求备份服务器回复。
+				如果为true，则备份服务器需要尽快发送一个Standby Status Update消息。
+			*/
 			var pkm pglogrepl.PrimaryKeepaliveMessage
 			if pkm, err = pglogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:]); err == nil && pkm.ReplyRequested {
 				p.nextReportTime = time.Time{}
 			}
 		case pglogrepl.XLogDataByteID:
+			/*
+				WALStart：这是一个LSN类型的字段，表示WAL数据开始的位置。LSN（Log Sequence Number）是PostgreSQL中用于标识WAL位置的数据类型。
+				ServerWALEnd：这是一个LSN类型的字段，表示主服务器的WAL结束位置。
+				ServerTime：这是一个time.Time类型的字段，表示主服务器发送WAL数据消息时的服务器时间。
+				WALData：这是一个[]byte类型的字段，表示WAL数据的有效负载。这个字段包含了实际的WAL数据。
+			*/
 			xld, err := pglogrepl.ParseXLogData(msg.Data[1:])
 			if err != nil {
 				return change, err
@@ -225,6 +248,7 @@ func (p *PGXSource) fetching(ctx context.Context) (change Change, err error) {
 	return change, err
 }
 
+// Commit 更新check point到PGXSource
 func (p *PGXSource) Commit(cp cursor.Checkpoint) {
 	if cp.LSN != 0 {
 		atomic.StoreUint64(&p.ackLsn, cp.LSN)

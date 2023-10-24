@@ -2,3 +2,15 @@
 module_pathname = '$libdir/pgcapture'
 default_version = '0.1'
 schema = 'pgcapture'
+
+# 在 PostgreSQL 中，扩展是一种打包一组相关 SQL 对象的方式，例如函数、数据类型、操作符和索引方法等。
+
+# 这个元数据定义的含义如下：
+
+# module_pathname = '$libdir/pgcapture'：这行定义了扩展的模块路径。$libdir 是 PostgreSQL 的库目录的路径，pgcapture 是扩展的名字。
+# 所以，这行代码的意思是，这个扩展的模块文件位于 PostgreSQL 的库目录下的 pgcapture 子目录中。
+
+# default_version = '0.1'：这行定义了扩展的默认版本。当你安装这个扩展但没有指定版本时，PostgreSQL 会使用这个默认版本。
+
+# schema = 'pgcapture'：这行定义了扩展的模式。在 PostgreSQL 中，模式是一种命名空间，它可以包含表、视图、索引、数据类型、函数和操作符等。
+# 这行代码的意思是，这个扩展的所有对象都位于 pgcapture 模式中。

@@ -16,11 +16,17 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var ErrMissingTable = errors.New("missing Schema or table")
+var ErrLSNFallBehind = errors.New("lsn fall behind")
+var ErrLSNMissing = errors.New("missing lsn record")
+
 // SourceDumper 下载快照接口
 type SourceDumper interface {
 	LoadDump(minLSN uint64, info *pb.DumpInfoResponse) ([]*pb.Change, error)
 	Stop()
 }
+
+/*********************************************************************************************************************/
 
 func NewAgentSourceDumper(ctx context.Context, url string) (*AgentSource, error) {
 	conn, err := grpc.DialContext(ctx, url, grpc.WithInsecure())
@@ -39,7 +45,7 @@ type AgentSource struct {
 	client pb.AgentClient
 }
 
-// LoadDump 下载指定记录
+// LoadDump 连接agent下载指定记录
 func (a *AgentSource) LoadDump(minLSN uint64, info *pb.DumpInfoResponse) (changes []*pb.Change, err error) {
 	stream, err := a.client.StreamDump(context.Background(), &pb.AgentDumpRequest{
 		MinLsn: minLSN,
@@ -75,6 +81,8 @@ func (a *AgentSource) LoadDump(minLSN uint64, info *pb.DumpInfoResponse) (change
 func (a *AgentSource) Stop() {
 	a.conn.Close()
 }
+
+/*********************************************************************************************************************/
 
 func NewPGXSourceDumper(ctx context.Context, url string) (*PGXSourceDumper, error) {
 	conn, err := pgx.Connect(ctx, url)
@@ -180,7 +188,3 @@ func checkLSN(ctx context.Context, tx pgx.Tx, minLSN uint64) (err error) {
 	}
 	return err
 }
-
-var ErrMissingTable = errors.New("missing Schema or table")
-var ErrLSNFallBehind = errors.New("lsn fall behind")
-var ErrLSNMissing = errors.New("missing lsn record")

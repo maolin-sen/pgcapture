@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
+// Gateway chang从pulsar获取，dumper从agent获取
 type Gateway struct {
 	pb.UnimplementedDBLogGatewayServer
 	SourceResolver SourceResolver //下载change
@@ -47,11 +48,13 @@ func (s *Gateway) Capture(server pb.DBLogGateway_CaptureServer) error {
 		return err
 	}
 
+	// 获取Init请求
 	init := request.GetInit()
 	if init == nil {
 		return ErrCaptureInitMessageRequired
 	}
 
+	// 正则过滤器
 	filter, err := tableRegexFromInit(init)
 	if err != nil {
 		return err
@@ -72,6 +75,7 @@ func (s *Gateway) Capture(server pb.DBLogGateway_CaptureServer) error {
 	return s.capture(init, filter, server, src, dumper)
 }
 
+// 接收应用消费信息
 func (s *Gateway) acknowledge(server pb.DBLogGateway_CaptureServer, src source.RequeueSource, dumps *dumpMap) chan error {
 	done := make(chan error)
 	go func() {
@@ -82,15 +86,18 @@ func (s *Gateway) acknowledge(server pb.DBLogGateway_CaptureServer, src source.R
 				close(done)
 				return
 			}
+			// 获取ack请求
 			if ack := request.GetAck(); ack != nil {
 				if ack.Checkpoint.Lsn != 0 {
 					if ack.RequeueReason != "" {
 						src.Requeue(cursor.Checkpoint{
+							// 消费事件失败，重新入队，重新消费
 							LSN:  ack.Checkpoint.Lsn,
 							Seq:  ack.Checkpoint.Seq,
 							Data: ack.Checkpoint.Data,
 						}, ack.RequeueReason)
 					} else {
+						// 表示成功消费事件
 						src.Commit(cursor.Checkpoint{
 							LSN:  ack.Checkpoint.Lsn,
 							Seq:  ack.Checkpoint.Seq,
@@ -102,8 +109,10 @@ func (s *Gateway) acknowledge(server pb.DBLogGateway_CaptureServer, src source.R
 					// ack.Checkpoint.Seq is dump id
 					// len(ack.Checkpoint.Data) == 1 for last record of dump
 					if len(ack.Checkpoint.Data) == 1 {
+						// Lsn == 0 && len(ack.Checkpoint.Data) == 1 => 表示消费到最后的change
 						dumps.ack(ack.Checkpoint.Seq, ack.RequeueReason)
 					} else if ack.RequeueReason != "" {
+						// Lsn == 0 && ack>RequeueReason != "" =>
 						dumps.ack(ack.Checkpoint.Seq, ack.RequeueReason)
 					}
 				}
@@ -113,6 +122,7 @@ func (s *Gateway) acknowledge(server pb.DBLogGateway_CaptureServer, src source.R
 	return done
 }
 
+// DBLogGateway_CaptureServer接收两种请求：1.init请求 2.ack请求 发送：changes回复
 func (s *Gateway) capture(init *pb.CaptureInit, filter *regexp.Regexp, server pb.DBLogGateway_CaptureServer, src source.RequeueSource, dumper SourceDumper) error {
 	var addr string
 	if p, ok := peer.FromContext(server.Context()); ok {
@@ -181,9 +191,9 @@ func (s *Gateway) capture(init *pb.CaptureInit, filter *regexp.Regexp, server pb
 			if !more {
 				return nil
 			}
-			var dump []*pb.Change
+			var changes []*pb.Change
 			if filter == nil || filter.MatchString(info.Resp.Table) {
-				dump, err = dumper.LoadDump(lsn, info.Resp)
+				changes, err = dumper.LoadDump(lsn, info.Resp)
 				if err != nil {
 					logger.WithFields(logrus.Fields{"Dump": info.Resp.String()}).Errorf("dump error %v", err)
 					if !errors.Is(err, ErrMissingTable) {
@@ -192,18 +202,17 @@ func (s *Gateway) capture(init *pb.CaptureInit, filter *regexp.Regexp, server pb
 					}
 				}
 			}
-			if len(dump) == 0 {
+			if len(changes) == 0 {
 				info.Ack("")
 				continue
 			}
 
-			logger.WithFields(logrus.Fields{"Dump": info.Resp.String(), "Len": len(dump)}).Info("dump loaded")
-			dumpID := ongoingDumps.store(info)
-
-			//发送dumps的records到consumer
+			//发送dumps的records到consumer，通过dumpID标识下载快照信息的是属于哪个请求的
 			var isLast []byte
-			for i, change := range dump {
-				if i+1 == len(dump) {
+			dumpID := ongoingDumps.store(info)
+			for i, change := range changes {
+				//标识是否是最后的change
+				if i+1 == len(changes) {
 					isLast = []byte{1}
 				}
 				if err = server.Send(&pb.CaptureMessage{Checkpoint: &pb.Checkpoint{
@@ -211,7 +220,7 @@ func (s *Gateway) capture(init *pb.CaptureInit, filter *regexp.Regexp, server pb
 					Seq:  dumpID,
 					Data: isLast,
 				}, Change: change}); err != nil {
-					logger.WithFields(logrus.Fields{"Dump": info.Resp.String(), "Len": len(dump), "Idx": i}).Errorf("partial dump error: %v", err)
+					logger.WithFields(logrus.Fields{"Dump": info.Resp.String(), "Len": len(changes), "Idx": i}).Errorf("partial dump error: %v", err)
 					info.Ack(err.Error())
 					return err
 				}
@@ -259,6 +268,7 @@ func (m *dumpMap) ack(id uint32, reason string) {
 	m.mu.Unlock()
 }
 
+// hash code
 func dumpID(info *pb.DumpInfoResponse) uint32 {
 	sum := crc32.NewIEEE()
 	sum.Write([]byte(info.Schema))

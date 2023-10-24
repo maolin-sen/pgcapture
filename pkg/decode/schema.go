@@ -106,10 +106,11 @@ func NewPGXSchemaLoader(conn *pgx.Conn) *PGXSchemaLoader {
 
 type PGXSchemaLoader struct {
 	conn  *pgx.Conn
-	types TypeCache
-	iKeys KeysCache
+	types TypeCache //[模式名][表名][列名][列类型标识]
+	iKeys KeysCache //[模式名][表名][]索引信息
 }
 
+// RefreshType 初始化所有列信息（[模式名][表名][列名][列类型标识]）
 func (p *PGXSchemaLoader) RefreshType() error {
 	rows, err := p.conn.Query(context.Background(), sql.QueryAttrTypeOID)
 	if err != nil {
@@ -138,6 +139,7 @@ func (p *PGXSchemaLoader) RefreshType() error {
 	return nil
 }
 
+// RefreshColumnInfo 初始化所有索引信息（[模式名][表名][]索引信息）
 func (p *PGXSchemaLoader) RefreshColumnInfo() error {
 	rows, err := p.conn.Query(context.Background(), sql.QueryIdentityKeys)
 	if err != nil {

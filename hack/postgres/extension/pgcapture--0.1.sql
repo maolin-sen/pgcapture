@@ -14,6 +14,20 @@ CREATE FUNCTION pgcapture.sql_command_tags(p_sql TEXT)
     'MODULE_PATHNAME', 'sql_command_tags'
 LANGUAGE C VOLATILE STRICT;
 
+-- 函数的逻辑如下：
+--
+-- 首先，函数调用 pgcapture.current_query() 来获取当前执行的 SQL 查询字符串，并将其存储在 qstr 变量中。
+--
+-- 然后，函数调用 pgcapture.sql_command_tags(qstr) 来获取 SQL 查询的命令标签，并将其存储在 tags 数组中。
+--
+-- 接着，函数从 pg_stat_activity 视图中选择一些信息（数据库名、用户名、应用程序名、客户端地址、后端启动时间和事务开始时间），
+-- 并将这些信息转换为 JSON 格式，然后存储在 acti 变量中。这个选择操作只针对当前的后端进程（通过 pg_backend_pid() 函数获取）。
+--
+-- 最后，函数将 qstr、tags 和 acti 插入到 pgcapture.ddl_logs 表中。
+--
+-- 这个函数可能被用于审计或监控，因为它可以记录每个 DDL（数据定义语言）操作的详细信息，包括操作的类型、执行操作的用户和操作的时间等。这个函数可能是一个事件触发器，
+-- 当一个 DDL 事件发生时，它会被自动调用。
+
 CREATE FUNCTION pgcapture.log_ddl() RETURNS event_trigger AS $$
 declare
 qstr TEXT;
@@ -27,12 +41,35 @@ insert into pgcapture.ddl_logs(query, tags, activity) values (qstr,tags,acti);
 end;
 $$ LANGUAGE plpgsql STRICT;
 
+-- 创建了一个名为 pgcapture_ddl_command_start 的事件触发器。事件触发器是 PostgreSQL 的一个特性，它允许你在某些系统事件发生时自动执行一些操作。
+--
+-- 这个事件触发器的逻辑如下：
+--
+-- 它监听 ddl_command_start 事件，这个事件在任何数据定义语言（DDL）命令开始执行时发生。
+--
+-- 它只在特定的命令标签出现时触发，这些命令标签包括 'CREATE TABLE AS'、'SELECT INTO'、'DROP TRIGGER' 和 'DROP FUNCTION'。
+--
+-- 当触发器被触发时，它执行 pgcapture.log_ddl() 函数。这个函数可能会记录一些信息，例如执行的 SQL 查询、命令标签和一些关于后端进程的信息。
+--
+-- 这个事件触发器可以用于审计或监控，因为它可以帮助你跟踪和记录特定类型的 DDL 操作。例如，你可以用它来检查是否有人尝试删除一个触发器或函数，或者是否有人尝试创建一个新的表。
 CREATE EVENT TRIGGER pgcapture_ddl_command_start ON ddl_command_start WHEN tag IN (
     'CREATE TABLE AS',
     'SELECT INTO',
     'DROP TRIGGER',
     'DROP FUNCTION'
 ) EXECUTE PROCEDURE pgcapture.log_ddl();
+
+-- 创建了一个名为 pgcapture_ddl_command_end 的事件触发器。事件触发器是 PostgreSQL 的一个特性，它允许你在某些系统事件发生时自动执行一些操作。
+--
+-- 这个事件触发器的逻辑如下：
+--
+-- 它监听 ddl_command_end 事件，这个事件在任何数据定义语言（DDL）命令执行结束时发生。
+--
+-- 它只在特定的命令标签出现时触发，这些命令标签包括 'ALTER AGGREGATE'、'ALTER COLLATION'、'ALTER CONVERSION'、'ALTER DOMAIN' 等等，总共有大约 80 个不同的命令标签。
+--
+-- 当触发器被触发时，它执行 pgcapture.log_ddl() 函数。这个函数可能会记录一些信息，例如执行的 SQL 查询、命令标签和一些关于后端进程的信息。
+--
+-- 这个事件触发器可以用于审计或监控，因为它可以帮助你跟踪和记录特定类型的 DDL 操作。例如，你可以用它来检查是否有人尝试修改一个表或视图，或者是否有人尝试创建或删除一个索引。
 CREATE EVENT TRIGGER pgcapture_ddl_command_end ON ddl_command_end WHEN TAG IN (
     'ALTER AGGREGATE',
     'ALTER COLLATION',

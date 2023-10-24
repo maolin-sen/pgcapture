@@ -26,7 +26,7 @@ type Controller struct {
 	log       *logrus.Entry
 }
 
-// PullDumpInfo 注册dump info的接收端
+// PullDumpInfo 流式注册dump info
 func (c *Controller) PullDumpInfo(server pb.DBLogController_PullDumpInfoServer) (err error) {
 	id := strconv.FormatInt(atomic.AddInt64(&c.clients, 1), 10)
 

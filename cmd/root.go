@@ -67,22 +67,25 @@ func sourceToSink(src source.Source, sk sink.Sinker) (err error) {
 	}()
 
 	<-signals
-	logrus.Info("receive signal, stopping...")
-	err = sk.Stop()
-	if err != nil {
-		return err
+	{
+		logrus.Info("receive signal, stopping...")
+		err = sk.Stop()
+		if err != nil {
+			return err
+		}
+		err = src.Stop()
+		if err != nil {
+			return err
+		}
+		logrus.Info("receive signal, stopped")
+		if err = sk.Error(); err != nil {
+			return err
+		}
+		if err = src.Error(); err != nil {
+			return err
+		}
 	}
-	err = src.Stop()
-	if err != nil {
-		return err
-	}
-	logrus.Info("receive signal, stopped")
-	if err := sk.Error(); err != nil {
-		return err
-	}
-	if err := src.Error(); err != nil {
-		return err
-	}
+
 	return nil
 }
 

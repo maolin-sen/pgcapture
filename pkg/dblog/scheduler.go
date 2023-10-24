@@ -16,9 +16,9 @@ var ErrAlreadyScheduled = errors.New("already scheduled")
 var ErrAlreadyRegistered = errors.New("already registered")
 
 type Scheduler interface {
-	Schedule(uri string, dumps []*pb.DumpInfoResponse, fn AfterSchedule) error
-	Register(uri string, client string, fn OnSchedule) (CancelFunc, error)
-	Ack(uri string, client string, requeue string)
+	Schedule(uri string, dumps []*pb.DumpInfoResponse, fn AfterSchedule) error //
+	Register(uri string, client string, fn OnSchedule) (CancelFunc, error)     //注册接收端
+	Ack(uri string, client string, requeue string)                             //下发任务
 	SetCoolDown(uri string, dur time.Duration)
 	StopSchedule(uri string)
 }
@@ -44,7 +44,7 @@ type MemoryScheduler struct {
 fn = func() {log.Infof("finish scheduling dumps of %s", req.Uri)}
 */
 
-// Schedule 注册任务
+// Schedule 调度任务
 func (s *MemoryScheduler) Schedule(uri string, dumps []*pb.DumpInfoResponse, fn AfterSchedule) error {
 	s.pendingMu.Lock()
 	defer s.pendingMu.Unlock()
@@ -54,6 +54,7 @@ func (s *MemoryScheduler) Schedule(uri string, dumps []*pb.DumpInfoResponse, fn 
 	}
 	s.pending[uri] = &pending{dumps: dumps}
 
+	//调用该uri下的所有任务
 	go s.schedule(uri, fn)
 	return nil
 }
@@ -132,6 +133,7 @@ func (s *MemoryScheduler) scheduleOne(uri string) bool {
 	return busy == 0 && remain == 0
 }
 
+// Register 向调度器注册接收端和处理函数
 func (s *MemoryScheduler) Register(uri string, client string, fn OnSchedule) (CancelFunc, error) {
 	s.clientsMu.Lock()
 	defer s.clientsMu.Unlock()
@@ -155,6 +157,7 @@ func (s *MemoryScheduler) Register(uri string, client string, fn OnSchedule) (Ca
 	return track.cancel, nil
 }
 
+// Ack 向调度下发任务
 func (s *MemoryScheduler) Ack(uri string, client string, requeue string) {
 	var dump *pb.DumpInfoResponse
 

@@ -82,7 +82,6 @@ func NewPulsarSubscriptionTracker(client pulsar.Client, topic string, commitInte
 		Type:                       pulsar.Exclusive,
 		ReplicateSubscriptionState: replicateState,
 	})
-
 	if err != nil {
 		return nil, err
 	}

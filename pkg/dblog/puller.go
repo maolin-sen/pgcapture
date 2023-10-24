@@ -18,6 +18,7 @@ type DumpInfo struct {
 	client pb.DBLogController_PullDumpInfoClient
 }
 
+// Ack 取消接收本次dump，并返回原因信息
 func (i *DumpInfo) Ack(requeueReason string) error {
 	if i.client == nil {
 		return nil
@@ -31,6 +32,7 @@ type GRPCDumpInfoPuller struct {
 	Client pb.DBLogControllerClient
 }
 
+// Pull 流式接收controller下发的任务
 func (p *GRPCDumpInfoPuller) Pull(ctx context.Context, uri string) chan DumpInfo {
 	resp := make(chan DumpInfo, 1)
 
@@ -52,6 +54,7 @@ func (p *GRPCDumpInfoPuller) pulling(ctx context.Context, uri string, resp chan 
 	if err != nil {
 		return err
 	}
+	//向controller注册
 	if err = client.Send(&pb.DumpInfoRequest{Uri: uri}); err != nil {
 		return err
 	}

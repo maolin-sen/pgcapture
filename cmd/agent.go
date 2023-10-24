@@ -103,6 +103,7 @@ func (a *Agent) Configure(ctx context.Context, request *pb.AgentConfigRequest) (
 	}
 }
 
+// Dump 根据请求下载指定快照数据
 func (a *Agent) Dump(ctx context.Context, req *pb.AgentDumpRequest) (*pb.AgentDumpResponse, error) {
 	var dumper *dblog.PGXSourceDumper
 	a.mu.Lock()
@@ -113,7 +114,7 @@ func (a *Agent) Dump(ctx context.Context, req *pb.AgentDumpRequest) (*pb.AgentDu
 		return nil, status.Error(codes.Aborted, "dumper is not ready")
 	}
 
-	dump, err := dumper.LoadDump(req.MinLsn, req.Info)
+	changes, err := dumper.LoadDump(req.MinLsn, req.Info)
 	if err != nil {
 		switch err {
 		case dblog.ErrMissingTable:
@@ -125,9 +126,10 @@ func (a *Agent) Dump(ctx context.Context, req *pb.AgentDumpRequest) (*pb.AgentDu
 		}
 		return nil, err
 	}
-	return &pb.AgentDumpResponse{Change: dump}, nil
+	return &pb.AgentDumpResponse{Change: changes}, nil
 }
 
+// StreamDump 根据请求下载指定快照数据，并流式发送change
 func (a *Agent) StreamDump(req *pb.AgentDumpRequest, server pb.Agent_StreamDumpServer) error {
 	resp, err := a.Dump(server.Context(), req)
 	if err != nil {
